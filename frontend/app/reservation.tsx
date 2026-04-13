@@ -1,75 +1,73 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { COLORS, ACTIVITIES } from '../src/constants/theme';
+import { COLORS } from '../src/constants/theme';
 import { api } from '../src/utils/api';
+import { getActivityById } from '../src/utils/storage';
 
 export default function ReservationScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const activity = ACTIVITIES.find(a => a.id === id) || ACTIVITIES[0];
+  const [activity, setActivity] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [participants, setParticipants] = useState(2);
   const [timeSlot, setTimeSlot] = useState('19h00');
-  const [loading, setLoading] = useState(false);
-  const total = participants * activity.priceUnit;
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (id) getActivityById(id as string).then(act => { setActivity(act); setLoading(false); });
+  }, [id]);
+
+  if (loading) return <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color={COLORS.navy} /></View>;
+  if (!activity) return (
+    <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <Text style={{ color: '#888' }}>Activite introuvable</Text>
+      <TouchableOpacity onPress={() => router.back()}><Text style={{ color: COLORS.navy, marginTop: 12, fontWeight: '600' }}>Retour</Text></TouchableOpacity>
+    </View>
+  );
+
+  const priceUnit = activity.price_unit || activity.priceUnit || 0;
+  const total = participants * priceUnit;
 
   const confirm = async () => {
-    setLoading(true);
+    setSubmitting(true);
     try {
       await api.createReservation({ activity_id: activity.id, participants, date: 'Ce week-end', time_slot: timeSlot, total });
       Alert.alert('Reservation confirmee !', `${activity.name} - ${participants} pers - ${total}EUR`, [{ text: 'OK', onPress: () => router.replace('/map') }]);
     } catch {
       Alert.alert('Reservation confirmee !', `${activity.name} pour ${participants} personnes`, [{ text: 'OK', onPress: () => router.replace('/map') }]);
     }
-    setLoading(false);
+    setSubmitting(false);
   };
 
   return (
     <View style={s.container} testID="reservation-screen">
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} testID="reservation-back-btn">
-          <Feather name="arrow-left" size={22} color={COLORS.navy} />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} testID="reservation-back-btn"><Feather name="arrow-left" size={22} color={COLORS.navy} /></TouchableOpacity>
         <Text style={s.headerTitle}>Reservation</Text>
         <View style={{ width: 22 }} />
       </View>
-
       <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
-        {/* Activity Card */}
         <View style={s.card}>
           <Text style={s.cardLabel}>Activite</Text>
           <View style={s.actRow}>
-            <Image source={{ uri: activity.image }} style={s.actImg} />
-            <View>
-              <Text style={s.actName}>{activity.name}</Text>
-              <Text style={s.actLoc}>{activity.address}</Text>
-            </View>
+            {activity.image ? <Image source={{ uri: activity.image }} style={s.actImg} /> : <View style={[s.actImg, { backgroundColor: COLORS.navy }]} />}
+            <View><Text style={s.actName}>{activity.name}</Text><Text style={s.actLoc}>{activity.address}</Text></View>
           </View>
         </View>
-
-        {/* Participants */}
         <View style={s.card}>
           <Text style={s.cardLabel}>Participants</Text>
           <View style={s.counterRow}>
-            <TouchableOpacity style={s.cBtn} onPress={() => setParticipants(Math.max(1, participants - 1))} testID="res-minus-btn">
-              <Text style={s.cBtnText}>-</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={s.cBtn} onPress={() => setParticipants(Math.max(1, participants - 1))} testID="res-minus-btn"><Text style={s.cBtnText}>-</Text></TouchableOpacity>
             <Text style={s.cNum} testID="res-count">{participants}</Text>
-            <TouchableOpacity style={[s.cBtn, s.cBtnPlus]} onPress={() => setParticipants(Math.min(20, participants + 1))} testID="res-plus-btn">
-              <Text style={[s.cBtnText, { color: '#fff' }]}>+</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={[s.cBtn, s.cBtnPlus]} onPress={() => setParticipants(Math.min(20, participants + 1))} testID="res-plus-btn"><Text style={[s.cBtnText, { color: '#fff' }]}>+</Text></TouchableOpacity>
           </View>
-
           <View style={s.section}>
             <Text style={s.sLabel}>Date</Text>
-            <View style={s.sRow}>
-              <Text style={s.sValue}>Ce week-end</Text>
-              <TouchableOpacity><Text style={s.sEdit}>Modifier</Text></TouchableOpacity>
-            </View>
+            <View style={s.sRow}><Text style={s.sValue}>Ce week-end</Text><TouchableOpacity><Text style={s.sEdit}>Modifier</Text></TouchableOpacity></View>
           </View>
-
           <View style={s.section}>
             <Text style={s.sLabel}>Creneau</Text>
             <View style={s.timeRow}>
@@ -81,18 +79,12 @@ export default function ReservationScreen() {
             </View>
           </View>
         </View>
-
-        {/* Total */}
         <View style={s.totalCard}>
-          <View>
-            <Text style={s.totalLabel}>Total estime</Text>
-            <Text style={s.totalDetail}>{participants} pers x {activity.priceUnit}EUR</Text>
-          </View>
+          <View><Text style={s.totalLabel}>Total estime</Text><Text style={s.totalDetail}>{participants} pers x {priceUnit}EUR</Text></View>
           <Text style={s.totalVal}>{total}EUR</Text>
         </View>
-
-        <TouchableOpacity style={s.confirmBtn} onPress={confirm} disabled={loading} testID="confirm-reservation-btn">
-          <Text style={s.confirmText}>{loading ? 'En cours...' : 'Confirmer la reservation'}</Text>
+        <TouchableOpacity style={s.confirmBtn} onPress={confirm} disabled={submitting} testID="confirm-reservation-btn">
+          <Text style={s.confirmText}>{submitting ? 'En cours...' : 'Confirmer la reservation'}</Text>
         </TouchableOpacity>
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -102,7 +94,7 @@ export default function ReservationScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.beige },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 52, paddingHorizontal: 20, paddingBottom: 16, backgroundColor: COLORS.beige },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 52, paddingHorizontal: 20, paddingBottom: 16 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.navy },
   body: { flex: 1, paddingHorizontal: 16 },
   card: { backgroundColor: '#fff', borderRadius: 18, padding: 18, marginBottom: 12 },

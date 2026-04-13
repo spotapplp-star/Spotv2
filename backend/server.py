@@ -597,11 +597,7 @@ async def seed_data():
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
         logger.info("Admin password updated")
 
-    # Seed activities
-    count = await db.activities.count_documents({})
-    if count == 0:
-        await db.activities.insert_many(SEED_ACTIVITIES)
-        logger.info(f"Seeded {len(SEED_ACTIVITIES)} activities")
+    # Activities are managed via Admin Panel - no seeding
 
     # Create indexes
     await db.users.create_index("email", unique=True)
